@@ -1,7 +1,15 @@
 #include <Dynamixel2Arduino.h>
 #include <Motor.h>
 
+const uint8_t BROADCAST_ID = 254;
+const uint8_t DXL_ID_CNT = 2;
+const uint8_t DXL_ID_LIST[DXL_ID_CNT] = {1, 2};
+
 using namespace ControlTableItem;
+
+typedef struct sw_data {
+    int32_t goal_velocity;
+} __attribute__((packed)) sw_data_t;
 
 Motor::Motor(Dynamixel2Arduino& dxl, unsigned long baudrate, float version, Debug* debug) : _dxl(dxl), _baudrate(baudrate), _version(version), _debug(debug) {
 }
@@ -46,17 +54,52 @@ bool Motor::setGoalPosition(int id, float val) {
     return _dxl.setGoalPosition(id, val);
 }
 
-bool Motor::setGoalPositions(int id[], int val[]) {
-    ParamForBulkWriteInst_t bulk_write_param;
-    for (unsigned int i = 2; i < 3; i++) {
-        static int32_t position = val[i];
-        bulk_write_param.xel[i].id = id[i];
-        bulk_write_param.xel[i].addr = 116;  //Goal Position on X serise
-        bulk_write_param.xel[i].length = 4;
-        memcpy(bulk_write_param.xel[i].data, &position, sizeof(position));
+//https://github.com/ROBOTIS-GIT/Dynamixel2Arduino/blob/master/examples/advanced/sync_read_write_raw/sync_read_write_raw.ino
+bool Motor::setGoalPositions(int id[], int val[], unsigned int size) {
+    sw_data_t sw_data[DXL_ID_CNT];
+    DYNAMIXEL::InfoSyncWriteInst_t sw_infos;
+    DYNAMIXEL::XELInfoSyncWrite_t info_xels_sw[DXL_ID_CNT];
+
+    for (int i = 0; i < DXL_ID_CNT; i++) {
+        _dxl.torqueOff(DXL_ID_LIST[i]);
+        _dxl.setOperatingMode(DXL_ID_LIST[i], OP_VELOCITY);
     }
-    bulk_write_param.id_count = 1;
-    return _dxl.bulkWrite(bulk_write_param);
+    _dxl.torqueOn(BROADCAST_ID);
+
+    // Fill the members of structure to syncWrite using internal packet buffer
+    sw_infos.packet.p_buf = nullptr;
+    sw_infos.packet.is_completed = false;
+    sw_infos.addr = 104;
+    sw_infos.addr_length = 4;
+    sw_infos.p_xels = info_xels_sw;
+    sw_infos.xel_count = 0;
+
+    sw_data[0].goal_velocity = 0;
+    sw_data[1].goal_velocity = 100;
+    for (int i = 0; i < DXL_ID_CNT; i++) {
+        info_xels_sw[i].id = DXL_ID_LIST[i];
+        info_xels_sw[i].p_data = (uint8_t*)&sw_data[i].goal_velocity;
+        sw_infos.xel_count++;
+    }
+    sw_infos.is_info_changed = true;
+
+    while (1) {
+        for (int i = 0; i < DXL_ID_CNT; i++) {
+            sw_data[i].goal_velocity = 5 + sw_data[i].goal_velocity;
+            if (sw_data[i].goal_velocity >= 50) {
+                sw_data[i].goal_velocity = 0;
+            }
+        }
+        sw_infos.is_info_changed = true;
+        if (_dxl.syncWrite(&sw_infos) == true) {
+            _debug->println("[SyncWrite] Success");
+        } else {
+            _debug->print("[SyncWrite] Fail, Lib error code: ");
+        }
+
+        delay(250);
+    }
+    return true;
 }
 
 int* Motor::getPresentCurrents(int id[]) {

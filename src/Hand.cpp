@@ -41,7 +41,7 @@ bool Hand::CalibratePositionBulk() {
                                                  100,
                                                  70,
                                                  70};
-    static float delta = 10;
+    static float delta = 20;
     int motors[Motors::SIZE] = {0, 1, 2, 3};
     int value[Motors::SIZE] = {0, 0, 0, 0};
     int* results;
@@ -49,36 +49,34 @@ bool Hand::CalibratePositionBulk() {
     int currents[Motors::SIZE] = {0, 0, 0, 0};
 
     bool calibration_flag = true;
-
-    while (calibration_flag) {
-        //calibration_flag = false;
-        results = _motor.getPresentCurrents(motors);
-        for(unsigned int i = 0; i < Motors::SIZE; i++){
-            currents[i] = *(results +i);
-        }
-        delay(1000);
-        results = _motor.getPresentPositions(motors);
-        for(unsigned int i = 0; i < Motors::SIZE; i++){
-            positions[i] = *(results +i);
-        }
-        delay(1000);
-        sprintf(_msg, "pos %d %d", positions[2], currents[2]);
-        _debug->println(_msg);
-        for (unsigned int i = 2; i < 3; i++) {
-            value[i] = positions[i];
-            if (currents[i] < current_limit[i]) {
-                calibration_flag = true;
-                value[i] = (i % 2 == 0) ? value[i] - delta : value[i] + delta;
-            }
-        }
-        sprintf(_msg, "m %d %d", motors[2], value[2]);
-        _debug->println(_msg);
+    bool res = _motor.setGoalPositions(motors, value, Motors::SIZE);
+    // while (calibration_flag) {
+    //     calibration_flag = false;
+    //     results = _motor.getPresentCurrents(motors);
+    //     for(unsigned int i = 0; i < Motors::SIZE; i++){
+    //         currents[i] = *(results +i);
+    //     }
+    //     results = _motor.getPresentPositions(motors);
+    //     for(unsigned int i = 0; i < Motors::SIZE; i++){
+    //         positions[i] = *(results +i);
+    //     }
+    //     sprintf(_msg, "pos0 %d %d pos1 %d %d", positions[0], currents[0], positions[1], currents[1]);
+    //     _debug->println(_msg);
+    //     for (unsigned int i = 0; i < Motors::SIZE; i++) {
+    //         value[i] = positions[i];
+    //         if (currents[i] < current_limit[i]) {
+    //             calibration_flag = true;
+    //             value[i] = (i % 2 == 0) ? value[i] - delta : value[i] + delta;
+    //         }
+    //     }
+    //     sprintf(_msg, "m0 %d %d m1 %d %d", motors[0], value[0], motors[1], value[1]);
+    //     _debug->println(_msg);
         
-        bool res = _motor.setGoalPositions(motors, value);
-        sprintf(_msg, "z %d", res);
-        _debug->println(_msg);
+    //     bool res = _motor.setGoalPositions(motors, value, Motors::SIZE);
+    //     sprintf(_msg, "z %d", res);
+    //     _debug->println(_msg);
         
-        delay(1000);
-    }
+    //     delay(1);
+    // }
     return true;
 }

@@ -35,7 +35,7 @@ class Motor {
     float getPresentCurrent(int id);
     int* getPresentCurrents(int id[]);
     bool setGoalPosition(int id, float val);
-    bool setGoalPositions(int id[], int val[]);
+    bool setGoalPositions(int id[], int val[], unsigned int size);
 };
 
 #endif
