@@ -1,13 +1,19 @@
 #ifndef HAND_H
 #define HAND_H
 
+#include <Motor.h>
+
 class Hand {
     private:
-        bool CalibratePosition();
-        
+        Motor _motor;
+        Debug* _debug;
+        char _msg[100];
+
     public:
-        Hand();
-        void Init();
+        Hand(Motor &motor, Debug* debug);
+        void init();
+        bool CalibratePosition();
+        bool CalibratePositionBulk();
 
 };
 
