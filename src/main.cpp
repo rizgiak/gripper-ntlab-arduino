@@ -1,18 +1,12 @@
+#include <Hand.h>
 #include <ros.h>
 #include <std_msgs/Empty.h>
 #include <std_msgs/String.h>
-#include <Hand.h>
-
-#define DXL Serial2
-#define DXL_DIR_PIN 2
-#define DXL_PROTOCOL_VERSION 2.0
-#define DXL_BAUDRATE 57600
 
 #define DEBUG true
 
-Dynamixel2Arduino dxl(DXL, DXL_DIR_PIN);
 Debug debug(&Serial, DEBUG);
-Motor motor(dxl, DXL_BAUDRATE, DXL_PROTOCOL_VERSION, &debug);
+Motor motor(&debug);
 Hand hand(motor, &debug);
 
 //ros::NodeHandle nh;

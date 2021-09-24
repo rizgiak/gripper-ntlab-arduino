@@ -1,45 +1,103 @@
-#include <Dynamixel2Arduino.h>
 #include <Motor.h>
 
-const uint8_t BROADCAST_ID = 254;
-const uint8_t DXL_ID_CNT = 2;
-const uint8_t DXL_ID_LIST[DXL_ID_CNT] = {1, 2};
+#define DXL Serial2
+#define DXL_DIR_PIN 2
+#define DXL_PROTOCOL_VERSION 2.0
+#define DXL_BAUDRATE 57600
 
-using namespace ControlTableItem;
+const uint16_t user_pkt_buf_cap = 128;
+uint8_t user_pkt_buf[user_pkt_buf_cap];
+
+const uint8_t BROADCAST_ID = 254;
+
+const uint16_t SR_START_ADDR = 126;
+const uint16_t SR_ADDR_LEN = 10;     //2+4+4
+const uint16_t SW_START_ADDR = 116;  //Goal position
+const uint16_t SW_ADDR_LEN = 4;
+
+typedef struct sr_data {
+    int16_t present_current;
+    int32_t present_velocity;
+    int32_t present_position;
+} __attribute__((packed)) sr_data_t;
 
 typedef struct sw_data {
-    int32_t goal_velocity;
+    int32_t goal_position;
 } __attribute__((packed)) sw_data_t;
 
-Motor::Motor(Dynamixel2Arduino& dxl, unsigned long baudrate, float version, Debug* debug) : _dxl(dxl), _baudrate(baudrate), _version(version), _debug(debug) {
+sr_data_t sr_data[Motor::DXL_ID_CNT];
+DYNAMIXEL::InfoSyncReadInst_t sr_infos;
+DYNAMIXEL::XELInfoSyncRead_t info_xels_sr[Motor::DXL_ID_CNT];
+
+sw_data_t sw_data[Motor::DXL_ID_CNT];
+DYNAMIXEL::InfoSyncWriteInst_t sw_infos;
+DYNAMIXEL::XELInfoSyncWrite_t info_xels_sw[Motor::DXL_ID_CNT];
+
+Motor::Motor(Debug* debug) : _dxl(Dynamixel2Arduino(DXL, DXL_DIR_PIN)), _debug(debug) {
 }
 
 void Motor::init() {
     _debug->println("Motor::init");
-    _dxl.begin(_baudrate);
-    _dxl.setPortProtocolVersion(_version);
+    _dxl.begin(DXL_BAUDRATE);
+    _dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+
+    //Set SyncWrite
+    sw_infos.packet.p_buf = nullptr;
+    sw_infos.packet.is_completed = false;
+    sw_infos.addr = SW_START_ADDR;
+    sw_infos.addr_length = SW_ADDR_LEN;
+    sw_infos.p_xels = info_xels_sw;
+    sw_infos.xel_count = 0;
+
+    for (unsigned int i = 0; i < DXL_ID_CNT; i++) {
+        sw_data[i].goal_position = 0;
+    }
+
+    for (int i = 0; i < DXL_ID_CNT; i++) {
+        info_xels_sw[i].id = DXL_ID_LIST[i];
+        info_xels_sw[i].p_data = (uint8_t*)&sw_data[i].goal_position;
+        sw_infos.xel_count++;
+    }
+    sw_infos.is_info_changed = true;
+
+    //Set SyncRead
+    sr_infos.packet.p_buf = user_pkt_buf;
+    sr_infos.packet.buf_capacity = user_pkt_buf_cap;
+    sr_infos.packet.is_completed = false;
+    sr_infos.addr = SR_START_ADDR;
+    sr_infos.addr_length = SR_ADDR_LEN;
+    sr_infos.p_xels = info_xels_sr;
+    sr_infos.xel_count = 0;
+    for (int i = 0; i < DXL_ID_CNT; i++) {
+        info_xels_sr[i].id = DXL_ID_LIST[i];
+        info_xels_sr[i].p_recv_buf = (uint8_t*)&sr_data[i];
+        sr_infos.xel_count++;
+    }
+    sr_infos.is_info_changed = true;
 }
 
-bool Motor::setOperatingMode(int id, OperatingMode mode) {
-    bool ret = false;
-    if (_dxl.ping(id)) {
-        ret = _dxl.torqueOff(id);
-        if (ret) ret = _dxl.setOperatingMode(id, mode);
-        if (ret) ret = _dxl.torqueOn(id);
+bool Motor::setOperatingMode(OperatingMode mode) {
+    bool ret = true;
+    for (int i = 0; i < DXL_ID_CNT; i++) {
+        if (ret && _dxl.ping(i)) {
+            if (ret) ret = _dxl.torqueOff(DXL_ID_LIST[i]);
+            if (ret) ret = _dxl.setOperatingMode(DXL_ID_LIST[i], mode);
+        }
     }
+    if (ret) ret = _dxl.torqueOn(BROADCAST_ID);
     return ret;
 }
 
 bool Motor::setPID(int id, int p, int i, int d) {
     bool ret = false;
-    ret = _dxl.writeControlTableItem(POSITION_P_GAIN, id, p);
-    if (ret) ret = _dxl.writeControlTableItem(POSITION_I_GAIN, id, i);
-    if (ret) ret = _dxl.writeControlTableItem(POSITION_D_GAIN, id, d);
+    ret = _dxl.writeControlTableItem(ControlTableItem::POSITION_P_GAIN, id, p);
+    if (ret) ret = _dxl.writeControlTableItem(ControlTableItem::POSITION_I_GAIN, id, i);
+    if (ret) ret = _dxl.writeControlTableItem(ControlTableItem::POSITION_D_GAIN, id, d);
     return ret;
 }
 
 bool Motor::setVelocity(int id, int vel) {
-    return _dxl.writeControlTableItem(PROFILE_VELOCITY, id, vel);
+    return _dxl.writeControlTableItem(ControlTableItem::PROFILE_VELOCITY, id, vel);
 }
 
 float Motor::getPresentPosition(int id) {
@@ -54,79 +112,40 @@ bool Motor::setGoalPosition(int id, float val) {
     return _dxl.setGoalPosition(id, val);
 }
 
-//https://github.com/ROBOTIS-GIT/Dynamixel2Arduino/blob/master/examples/advanced/sync_read_write_raw/sync_read_write_raw.ino
-bool Motor::setGoalPositions(int id[], int val[], unsigned int size) {
-    sw_data_t sw_data[DXL_ID_CNT];
-    DYNAMIXEL::InfoSyncWriteInst_t sw_infos;
-    DYNAMIXEL::XELInfoSyncWrite_t info_xels_sw[DXL_ID_CNT];
-
-    for (int i = 0; i < DXL_ID_CNT; i++) {
-        _dxl.torqueOff(DXL_ID_LIST[i]);
-        _dxl.setOperatingMode(DXL_ID_LIST[i], OP_VELOCITY);
-    }
-    _dxl.torqueOn(BROADCAST_ID);
-
-    // Fill the members of structure to syncWrite using internal packet buffer
-    sw_infos.packet.p_buf = nullptr;
-    sw_infos.packet.is_completed = false;
-    sw_infos.addr = 104;
-    sw_infos.addr_length = 4;
-    sw_infos.p_xels = info_xels_sw;
-    sw_infos.xel_count = 0;
-
-    sw_data[0].goal_velocity = 0;
-    sw_data[1].goal_velocity = 100;
-    for (int i = 0; i < DXL_ID_CNT; i++) {
-        info_xels_sw[i].id = DXL_ID_LIST[i];
-        info_xels_sw[i].p_data = (uint8_t*)&sw_data[i].goal_velocity;
-        sw_infos.xel_count++;
+//Ref: https://github.com/ROBOTIS-GIT/Dynamixel2Arduino/blob/master/examples/advanced/sync_read_write_raw/sync_read_write_raw.ino
+bool Motor::setGoalPositions(int val[]) {
+    for (unsigned int i = 0; i < DXL_ID_CNT; i++) {
+        sw_data[i].goal_position = val[i];
     }
     sw_infos.is_info_changed = true;
 
-    while (1) {
-        for (int i = 0; i < DXL_ID_CNT; i++) {
-            sw_data[i].goal_velocity = 5 + sw_data[i].goal_velocity;
-            if (sw_data[i].goal_velocity >= 50) {
-                sw_data[i].goal_velocity = 0;
-            }
-        }
-        sw_infos.is_info_changed = true;
-        if (_dxl.syncWrite(&sw_infos) == true) {
-            _debug->println("[SyncWrite] Success");
-        } else {
-            _debug->print("[SyncWrite] Fail, Lib error code: ");
-        }
-
-        delay(250);
+    if (_dxl.syncWrite(&sw_infos) == true) {
+        _debug->println("[SyncWrite] Success");
+    } else {
+        sprintf(_msg, "[SyncWrite] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
+        _debug->print(_msg);
     }
     return true;
 }
 
-int* Motor::getPresentCurrents(int id[]) {
-    return getValues(id, 126);
-}
+// Get present values(current, position)
+int* Motor::getPresentValues() {
+    uint8_t recv_cnt;
+    static int results[Motor::DXL_ID_CNT * 2];  //change size to add velocity
 
-int* Motor::getPresentPositions(int id[]) {
-    return getValues(id, 132);
-}
-
-int* Motor::getValues(int id[], uint16_t address) {
-    ParamForBulkReadInst_t bulk_read_param;
-    RecvInfoFromStatusInst_t read_result;
-    static int results[Motors::SIZE];
-    int result;
-
-    for (unsigned int i = 0; i < Motors::SIZE; i++) {
-        bulk_read_param.xel[i].id = id[i];
-        bulk_read_param.xel[i].addr = address;  //Present Current on X serise
-        bulk_read_param.xel[i].length = 4;
-    }
-    bulk_read_param.id_count = Motors::SIZE;
-    _dxl.bulkRead(bulk_read_param, read_result);
-
-    for (unsigned int i = 0; i < Motors::SIZE; i++) {
-        memcpy(&result, read_result.xel[i].data, read_result.xel[i].length);
-        results[i] = result;
+    recv_cnt = _dxl.syncRead(&sr_infos);
+    if (recv_cnt > 0) {
+        sprintf(_msg, "[SyncRead] Success, Received ID Count: %d", recv_cnt);
+        _debug->println(_msg);
+        for (int i = 0; i < recv_cnt; i++) {
+            sprintf(_msg, "  ID: %d, Err: %d\t Crr: %d \t Pos: %d", sr_infos.p_xels[i].id, sr_infos.p_xels[i].error, sr_data[i].present_current, (int)sr_data[i].present_position);
+            _debug->println(_msg);
+            results[i] = abs(sr_data[i].present_current);
+            results[i + Motor::DXL_ID_CNT] = sr_data[i].present_position;
+        }
+    } else {
+        sprintf(_msg, "[SyncRead] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
+        _debug->println(_msg);
     }
     return results;
 }
