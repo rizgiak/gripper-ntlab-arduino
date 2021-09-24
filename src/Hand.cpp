@@ -16,7 +16,7 @@ void Hand::init() {
 bool Hand::CalibratePosition() {
     static double current_limit[_motor.DXL_ID_CNT] = {100, 100, 70, 70}; // limit to stop calibration movement
     static float delta = 20;
-    for (int i = 0; i < Motors::SIZE; i++) {
+    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
         while (_motor.getPresentCurrent(i) < current_limit[i]) {
             if (i % 2 == 0) {
                 _motor.setGoalPosition(i, _motor.getPresentPosition(i) - delta);
