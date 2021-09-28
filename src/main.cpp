@@ -1,41 +1,103 @@
 #include <Hand.h>
 #include <ros.h>
-#include <std_msgs/Empty.h>
-#include <std_msgs/String.h>
+#include <sensor_msgs/JointState.h>
+#include <std_msgs/Float64.h>
 
-#define DEBUG true
+#define DEBUG false
 
+#if DEBUG
+char msg[100];
 Debug debug(&Serial, DEBUG);
+#else
+Debug debug(NULL, DEBUG);
+#endif
 Motor motor(&debug);
 Hand hand(motor, &debug);
 
-//ros::NodeHandle nh;
+ros::NodeHandle nh;
 
-// void messageCb(const std_msgs::Empty& toggle_msg) {
-//     digitalWrite(13, HIGH - digitalRead(13));  // blink the led
-// }
+const int DOF = 5;
+const char robot[8] = "gripper";
 
-//ros::Subscriber<std_msgs::Empty> sub("toggle_led", messageCb);
+float pos[DOF], vel[DOF], eff[DOF];
 
-//std_msgs::String str_msg;
-//ros::Publisher chatter("chatter", &str_msg);
+int* values;
+char* joint_name[DOF] = {"l_base_hand_r_position_controller",
+                         "r_base_hand_r_position_controller",
+                         "l_hand_rod_a_position_controller",
+                         "r_hand_rod_a_position_controller",
+                         "l_finger_roll_position_controller"};
 
-//char hello[13] = "hello world!";
+void jointSubs(const sensor_msgs::JointState& sub_msg) {
+    if (sub_msg.header.frame_id == "set") {
+        int value[4];
+        for (int i; i < motor.DXL_ID_CNT; i++) {
+            value[i] = sub_msg.position[i];
+        }
+        hand.movePositionRelative(value);
+    }
+}
+
+ros::Subscriber<sensor_msgs::JointState> sub("gripper_ntlab/SetPosition", jointSubs);
+
+sensor_msgs::JointState pub_msg;
+ros::Publisher pub("gripper_ntlab/JointState", &pub_msg);
+
+sensor_msgs::JointState setMsg() {
+    sensor_msgs::JointState msg;
+    values = hand.getCalibrationValue();
+    for (int i = 0; i < motor.DXL_ID_CNT; i++) {
+        pos[i] = *(values + i);
+        vel[i] = 1;
+        eff[i] = 1;
+    }
+
+    //Finger Servo
+    pos[DOF - 1] = 0;
+    vel[DOF - 1] = 1;
+    eff[DOF - 1] = 1;
+
+    msg.header.frame_id = robot;
+    msg.header.stamp = nh.now();
+
+    msg.name_length = DOF;
+    msg.velocity_length = DOF;
+    msg.position_length = DOF;
+    msg.effort_length = DOF;
+
+    msg.name = joint_name;
+    msg.position = pos;
+    msg.velocity = vel;
+    msg.effort = eff;
+    return msg;
+}
 
 void setup() {
+#if DEBUG
     Serial.begin(115200, SERIAL_8N1);
+#endif
     pinMode(13, OUTPUT);
-    //nh.initNode();
-    //nh.advertise(chatter);
-    //nh.subscribe(sub);
-
+#if DEBUG == false
+    nh.initNode();
+    nh.advertise(pub);
+    nh.subscribe(sub);
+#endif
     motor.init();
     hand.init();
 }
 
 void loop() {
-    //str_msg.data = hello;
-    //chatter.publish(&str_msg);
-    //nh.spinOnce();
-    delay(500);
+#if DEBUG
+    values = hand.getCalibrationValue();
+    for (int i = 0; i < motor.DXL_ID_CNT; i++) {
+        sprintf(msg, "j%d: %d, ", i, *(values + i));
+        debug.print(msg);
+    }
+    debug.println("");
+#else
+    pub_msg = setMsg();
+    pub.publish(&pub_msg);
+    nh.spinOnce();
+    delay(10);
+#endif
 }
