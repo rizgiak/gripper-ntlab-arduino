@@ -120,7 +120,7 @@ bool Motor::setGoalPositions(int val[]) {
     sw_infos.is_info_changed = true;
 
     if (_dxl.syncWrite(&sw_infos) == true) {
-        _debug->println("[SyncWrite] Success");
+        //_debug->println("[SyncWrite] Success");
     } else {
         sprintf(_msg, "[SyncWrite] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
         _debug->print(_msg);
@@ -130,22 +130,29 @@ bool Motor::setGoalPositions(int val[]) {
 
 // Get present values(current, position)
 int* Motor::getPresentValues() {
+    int trial = 0;
     uint8_t recv_cnt;
     static int results[Motor::DXL_ID_CNT * 2];  //change size to add velocity
+    bool flag_read = false;
 
-    recv_cnt = _dxl.syncRead(&sr_infos);
-    if (recv_cnt > 0) {
-        sprintf(_msg, "[SyncRead] Success, Received ID Count: %d", recv_cnt);
-        _debug->println(_msg);
-        for (int i = 0; i < recv_cnt; i++) {
-            sprintf(_msg, "  ID: %d, Err: %d\t Crr: %d \t Pos: %d", sr_infos.p_xels[i].id, sr_infos.p_xels[i].error, sr_data[i].present_current, (int)sr_data[i].present_position);
+    while (!flag_read) {
+        recv_cnt = _dxl.syncRead(&sr_infos);
+        if (recv_cnt > 0) {
+            //sprintf(_msg, "[SyncRead] Success, Received ID Count: %d", recv_cnt);
+            //_debug->println(_msg);
+            for (int i = 0; i < recv_cnt; i++) {
+                //sprintf(_msg, "  ID: %d, Err: %d\t Crr: %d \t Pos: %d", sr_infos.p_xels[i].id, sr_infos.p_xels[i].error, sr_data[i].present_current, (int)sr_data[i].present_position);
+                //_debug->println(_msg);
+                results[i] = abs(sr_data[i].present_current);
+                results[i + Motor::DXL_ID_CNT] = sr_data[i].present_position;
+            }
+            flag_read = true;
+        } else {
+            trial++;
+            if(trial > 10) flag_read = true;
+            sprintf(_msg, "[SyncRead] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
             _debug->println(_msg);
-            results[i] = abs(sr_data[i].present_current);
-            results[i + Motor::DXL_ID_CNT] = sr_data[i].present_position;
         }
-    } else {
-        sprintf(_msg, "[SyncRead] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
-        _debug->println(_msg);
     }
     return results;
 }
