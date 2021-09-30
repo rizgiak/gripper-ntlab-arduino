@@ -9,7 +9,9 @@ class Hand {
     Debug* _debug;
     char _msg[100];
     int _calib_position[4];
-    int* _presentValue;
+    int _limit_min[4];
+    int _limit_max[4];
+    int* _present_value;
 
    public:
     Hand(Motor& motor, Debug* debug);
@@ -17,7 +19,9 @@ class Hand {
     bool calibratePosition();
     bool calibratePositionBulk();
     bool movePositionRelative(int val[]);
+    bool movePositionRelativePrecision(int val[]);
     int* getCalibrationValue();
+    int* getPresentValue();
 };
 
 #endif

@@ -11,6 +11,7 @@ void Hand::init() {
 
     for (unsigned int i = 0; i < sizeof(Hand::_calib_position) / sizeof(Hand::_calib_position[0]); i++) {
         Hand::_calib_position[i] = 0;
+        _motor.setVelocity(i, 0);
     }
     if (Hand::calibratePositionBulk()) {
     }
@@ -45,21 +46,22 @@ bool Hand::calibratePositionBulk() {
     bool calibration_flag = false;
 
     while (!calibration_flag) {
-        Hand::_presentValue = _motor.getPresentValues();
+        delay(10);
+        Hand::_present_value = _motor.getPresentValues();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            currents[i] = *(Hand::_presentValue + i);
-            positions[i] = *(Hand::_presentValue + i + _motor.DXL_ID_CNT);
+            currents[i] = *(Hand::_present_value + i);
+            positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
         }
 
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
             value[i] = positions[i];
-            if (currents[i] < current_limit[i]) {
+            if (currents[i] < current_limit[i] && !motor_flag[i]) {
                 value[i] = (i % 2 == 0) ? value[i] - delta : value[i] + delta;
             } else {
                 motor_flag[i] = true;
             }
         }
-
+        delay(10);
         _motor.setGoalPositions(value);
         int j = 0;
         for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
@@ -71,9 +73,25 @@ bool Hand::calibratePositionBulk() {
     }
 
     // set calibration value
-    Hand::_presentValue = _motor.getPresentValues();
+    Hand::_present_value = _motor.getPresentValues();
+    _debug->print("calibration result: ");
     for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        _calib_position[i] = *(Hand::_presentValue + i + _motor.DXL_ID_CNT);
+        _calib_position[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+        sprintf(_msg, "p%d:%d, ", i, _calib_position[i]);
+        _debug->print(_msg);
+    }
+    _debug->println("");
+
+    //set limit
+    const int limit_offset = 2000;
+    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        if (i % 2 == 0) {
+            _limit_min[i] = _calib_position[i];
+            _limit_max[i] = _calib_position[i] + limit_offset;
+        } else {
+            _limit_min[i] = _calib_position[i] - limit_offset;
+            _limit_max[i] = _calib_position[i];
+        }
     }
     return true;
 }
@@ -82,37 +100,47 @@ int* Hand::getCalibrationValue() {
     return Hand::_calib_position;
 }
 
+int* Hand::getPresentValue() {
+    return Hand::_present_value;
+}
+
 bool Hand::movePositionRelative(int val[]) {
-    const double current_limit[_motor.DXL_ID_CNT] = {70, 70, 70, 70};  // limit to stop movement
     const float delta = 10;
 
     int goal_position[_motor.DXL_ID_CNT] = {0};
-    int value[_motor.DXL_ID_CNT] = {0};
     int positions[_motor.DXL_ID_CNT] = {0};
-    int currents[_motor.DXL_ID_CNT] = {0};
+    bool motor_direction[_motor.DXL_ID_CNT] = {0};
 
     bool motor_flag[_motor.DXL_ID_CNT] = {0};
     bool movement_flag = false;
     bool force_stop_flag = false;
 
     for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        goal_position[i] = *(_presentValue + _motor.DXL_ID_CNT + i) + val[i];
+        goal_position[i] = *(_present_value + _motor.DXL_ID_CNT + i) + val[i];
+        if (val[i] > 0)
+            motor_direction[i] = true;
+    }
+
+    Hand::_present_value = _motor.getPresentValues();
+    for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
     }
 
     while (!movement_flag) {
-        Hand::_presentValue = _motor.getPresentValues();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            currents[i] = *(Hand::_presentValue + i);
-            positions[i] = *(Hand::_presentValue + i + _motor.DXL_ID_CNT);
-        }
-
-        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            value[i] = positions[i];
-            if (currents[i] < current_limit[i]) {
-                if (positions[i] < goal_position[i]) {
-                    value[i] = (i % 2 == 0) ? value[i] - delta : value[i] + delta;
+            if (positions[i] <= _limit_max[i] && positions[i] >= _limit_min[i]) {
+                if (motor_direction[i]) {  //goal above present value
+                    if (positions[i] < goal_position[i]) {
+                        positions[i] = positions[i] + delta;
+                    } else {
+                        motor_flag[i] = true;
+                    }
                 } else {
-                    motor_flag[i] = true;
+                    if (positions[i] > goal_position[i]) {
+                        positions[i] = positions[i] - delta;
+                    } else {
+                        motor_flag[i] = true;
+                    }
                 }
             } else {
                 motor_flag[i] = true;
@@ -120,8 +148,72 @@ bool Hand::movePositionRelative(int val[]) {
             }
         }
 
-        if (!force_stop_flag)  // move only if the current motor is below the current limit
-            _motor.setGoalPositions(value);
+        if (!force_stop_flag) {  // move only if the current motor is between position limit
+            _motor.setGoalPositions(positions);
+        }
+
+        int j = 0;
+        for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
+            if (motor_flag[i])
+                j++;
+        }
+        if (j >= _motor.DXL_ID_CNT || force_stop_flag == true)
+            movement_flag = true;
+    }
+
+    return !force_stop_flag;
+}
+
+bool Hand::movePositionRelativePrecision(int val[]) {
+    const double current_limit[_motor.DXL_ID_CNT] = {120, 120, 120, 120};  // limit to stop movement
+    const float delta = 10;
+
+    int goal_position[_motor.DXL_ID_CNT] = {0};
+    int currents[_motor.DXL_ID_CNT] = {0};
+    int positions[_motor.DXL_ID_CNT] = {0};
+    bool motor_direction[_motor.DXL_ID_CNT] = {0};
+
+    bool motor_flag[_motor.DXL_ID_CNT] = {0};
+    bool movement_flag = false;
+    bool force_stop_flag = false;
+
+    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        goal_position[i] = *(_present_value + _motor.DXL_ID_CNT + i) + val[i];
+        if (val[i] > 0)
+            motor_direction[i] = true;
+    }
+
+    while (!movement_flag) {
+        Hand::_present_value = _motor.getPresentValues();
+        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+            currents[i] = *(Hand::_present_value + i);
+            positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+        }
+
+        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+            if (currents[i] < current_limit[i]) {
+                if (motor_direction[i]) {  //goal above present value
+                    if (positions[i] < goal_position[i]) {
+                        positions[i] = positions[i] + delta;
+                    } else {
+                        motor_flag[i] = true;
+                    }
+                } else {
+                    if (positions[i] > goal_position[i]) {
+                        positions[i] = positions[i] - delta;
+                    } else {
+                        motor_flag[i] = true;
+                    }
+                }
+            } else {
+                motor_flag[i] = true;
+                force_stop_flag = true;
+            }
+        }
+
+        if (!force_stop_flag) {  // move only if the current motor is below the current limit
+            _motor.setGoalPositions(positions);
+        }
 
         int j = 0;
         for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
