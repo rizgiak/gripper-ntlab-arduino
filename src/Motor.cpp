@@ -88,6 +88,13 @@ bool Motor::setOperatingMode(OperatingMode mode) {
     return ret;
 }
 
+bool Motor::setTorque(bool torque) {
+    if (torque)
+        return _dxl.torqueOn(BROADCAST_ID);
+    else
+        return _dxl.torqueOff(BROADCAST_ID);
+}
+
 bool Motor::setPID(int id, int p, int i, int d) {
     bool ret = false;
     ret = _dxl.writeControlTableItem(ControlTableItem::POSITION_P_GAIN, id, p);
@@ -132,7 +139,7 @@ bool Motor::setGoalPositions(int val[]) {
 int* Motor::getPresentValues() {
     int trial = 0;
     uint8_t recv_cnt;
-    static int results[Motor::DXL_ID_CNT * 2];  //change size to add velocity
+    static int results[Motor::DXL_ID_CNT * 3];  //change size to 3 add velocity
     bool flag_read = false;
 
     while (!flag_read) {
@@ -145,11 +152,12 @@ int* Motor::getPresentValues() {
                 //_debug->println(_msg);
                 results[i] = abs(sr_data[i].present_current);
                 results[i + Motor::DXL_ID_CNT] = sr_data[i].present_position;
+                results[i + Motor::DXL_ID_CNT * 2] = sr_data[i].present_velocity;
             }
             flag_read = true;
         } else {
             trial++;
-            if(trial > 10) flag_read = true;
+            if (trial > 10) flag_read = true;
             sprintf(_msg, "[SyncRead] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
             _debug->println(_msg);
         }

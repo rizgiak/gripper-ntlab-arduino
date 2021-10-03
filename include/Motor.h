@@ -19,15 +19,17 @@ class Motor {
     Motor(Debug* debug);
     void init();
     bool setOperatingMode(OperatingMode mode);
+    bool setTorque(bool torque);
     bool setPID(int id, int p, int i, int d);
     bool setVelocity(int id, int vel);
-    float getPresentPosition(int id);
-    int* getPresentPositions(int id[]);
-    float getPresentCurrent(int id);
-    int* getPresentCurrents(int id[]);
     bool setGoalPosition(int id, float val);
     bool setGoalPositions(int val[]);
+
+    float getPresentCurrent(int id);
+    float getPresentPosition(int id);
     int* getPresentValues();
+    int* getPresentCurrents(int id[]);
+    int* getPresentPositions(int id[]);
 };
 
 #endif
