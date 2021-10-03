@@ -1,6 +1,8 @@
 #include <Hand.h>
 #include <Motor.h>
 
+#define AUTO_CALIBRATION false
+
 Hand::Hand(Motor& motor, Debug* debug) : _motor(motor), _debug(debug), _msg("") {
 }
 
@@ -11,10 +13,15 @@ void Hand::init() {
 
     for (unsigned int i = 0; i < sizeof(Hand::_calib_position) / sizeof(Hand::_calib_position[0]); i++) {
         Hand::_calib_position[i] = 0;
-        _motor.setVelocity(i, 0);
+        _motor.setVelocity(i, 100);
     }
-    if (Hand::calibratePositionBulk()) {
-    }
+
+#if AUTO_CALIBRATION
+    _motor.setTorque(true);
+    Hand::calibratePositionBulk())
+#else
+    _motor.setTorque(false);
+#endif
 }
 
 // Home motor to base position (one-by-one)
@@ -104,6 +111,29 @@ int* Hand::getPresentValue() {
     return Hand::_present_value;
 }
 
+// Get present value from motors
+void Hand::updatePresentValue() {
+    Hand::_present_value = _motor.getPresentValues();
+}
+
+// Move position with position limitation
+bool Hand::movePosition(int val[]) {
+    bool force_stop_flag = false;
+
+    for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        if (val[i] > _limit_max[i] && val[i] < _limit_min[i]) {
+            force_stop_flag = true;
+        }
+    }
+
+    if (!force_stop_flag) {
+        _motor.setGoalPositions(val);
+    }
+    updatePresentValue();
+    return !force_stop_flag;
+}
+
+// Move position relative with only position limitation
 bool Hand::movePositionRelative(int val[]) {
     const float delta = 10;
 
@@ -121,7 +151,7 @@ bool Hand::movePositionRelative(int val[]) {
             motor_direction[i] = true;
     }
 
-    Hand::_present_value = _motor.getPresentValues();
+    updatePresentValue();
     for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
         positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
     }
@@ -164,6 +194,7 @@ bool Hand::movePositionRelative(int val[]) {
     return !force_stop_flag;
 }
 
+// Move position relative with position and current limit
 bool Hand::movePositionRelativePrecision(int val[]) {
     const double current_limit[_motor.DXL_ID_CNT] = {120, 120, 120, 120};  // limit to stop movement
     const float delta = 10;
@@ -184,7 +215,7 @@ bool Hand::movePositionRelativePrecision(int val[]) {
     }
 
     while (!movement_flag) {
-        Hand::_present_value = _motor.getPresentValues();
+        updatePresentValue();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
             currents[i] = *(Hand::_present_value + i);
             positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);

@@ -16,10 +16,14 @@ class Hand {
    public:
     Hand(Motor& motor, Debug* debug);
     void init();
+    
     bool calibratePosition();
     bool calibratePositionBulk();
+    bool movePosition(int val[]);
     bool movePositionRelative(int val[]);
     bool movePositionRelativePrecision(int val[]);
+
+    void updatePresentValue();
     int* getCalibrationValue();
     int* getPresentValue();
 };
