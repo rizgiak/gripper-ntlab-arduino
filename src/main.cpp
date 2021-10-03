@@ -1,4 +1,7 @@
 #include <Hand.h>
+#include <Thread.h>
+#include <ThreadController.h>
+#include <gripper_ntlab_controller/JointPosition.h>
 #include <ros.h>
 #include <sensor_msgs/JointState.h>
 #include <std_msgs/Float64.h>
@@ -11,6 +14,14 @@ Debug debug(&Serial, DEBUG);
 #else
 Debug debug(NULL, DEBUG);
 #endif
+
+ThreadController threadController = ThreadController();
+Thread* motorControlThread = new Thread();
+Thread* publishThread = new Thread();
+
+// define global function
+bool testCase1();
+
 Motor motor(&debug);
 Hand hand(motor, &debug);
 
@@ -21,6 +32,9 @@ const char robot[8] = "gripper";
 
 float pos[DOF], vel[DOF], eff[DOF];
 
+int mode;
+int position[DOF] = {0};
+
 int* values;
 char* joint_name[DOF] = {"l_base_hand_r_position_controller",
                          "r_base_hand_r_position_controller",
@@ -28,34 +42,31 @@ char* joint_name[DOF] = {"l_base_hand_r_position_controller",
                          "r_hand_rod_a_position_controller",
                          "l_finger_roll_position_controller"};
 
-void jointSubs(const sensor_msgs::JointState& sub_msg) {
-    if (sub_msg.header.frame_id == "set") {
-        int value[4];
-        for (int i; i < motor.DXL_ID_CNT; i++) {
-            value[i] = sub_msg.position[i];
-        }
-        hand.movePositionRelative(value);
+void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
+    mode = sub_msg.mode;
+    for (unsigned int i = 0; i < DOF; i++) {
+        position[i] = (int)sub_msg.position[i];
     }
 }
 
-ros::Subscriber<sensor_msgs::JointState> sub("gripper_ntlab/SetPosition", jointSubs);
+ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/SetPosition", jointSubs);
 
 sensor_msgs::JointState pub_msg;
 ros::Publisher pub("gripper_ntlab/JointState", &pub_msg);
 
 sensor_msgs::JointState setMsg() {
     sensor_msgs::JointState msg;
-    values = hand.getCalibrationValue();
+    values = hand.getPresentValue();
     for (int i = 0; i < motor.DXL_ID_CNT; i++) {
-        pos[i] = *(values + i);
-        vel[i] = 1;
+        pos[i] = *(values + i + motor.DXL_ID_CNT);
+        vel[i] = *(values + i + motor.DXL_ID_CNT * 2);
         eff[i] = 1;
     }
 
     //Finger Servo
     pos[DOF - 1] = 0;
     vel[DOF - 1] = 1;
-    eff[DOF - 1] = 1;
+    eff[DOF - 1] = mode;
 
     msg.header.frame_id = robot;
     msg.header.stamp = nh.now();
@@ -72,32 +83,96 @@ sensor_msgs::JointState setMsg() {
     return msg;
 }
 
+void motorControlCallback() {
+    if (mode == 72) {
+        hand.movePositionRelativePrecision(position);
+    } else if (mode == 96) {
+        hand.movePositionRelative(position);
+    } else if (mode == 112) {
+        hand.movePosition(position);
+    }
+}
+
+void publishCallback() {
+    pub_msg = setMsg();
+    pub.publish(&pub_msg);
+}
+
 void setup() {
 #if DEBUG
     Serial.begin(115200, SERIAL_8N1);
 #endif
     pinMode(13, OUTPUT);
 #if DEBUG == false
+    nh.getHardware()->setBaud(115200);
     nh.initNode();
     nh.advertise(pub);
     nh.subscribe(sub);
 #endif
     motor.init();
     hand.init();
+
+    motorControlThread->onRun(motorControlCallback);
+    motorControlThread->setInterval(500);
+
+    publishThread->onRun(publishCallback);
+    publishThread->setInterval(100);
+
+    threadController.add(motorControlThread);
+    threadController.add(publishThread);
 }
 
 void loop() {
 #if DEBUG
-    values = hand.getCalibrationValue();
-    for (int i = 0; i < motor.DXL_ID_CNT; i++) {
-        sprintf(msg, "j%d: %d, ", i, *(values + i));
-        debug.print(msg);
-    }
-    debug.println("");
+    testCase1();
 #else
-    pub_msg = setMsg();
-    pub.publish(&pub_msg);
+    threadController.run();
+    hand.updatePresentValue();
     nh.spinOnce();
-    delay(10);
 #endif
+}
+
+bool testCase1() {
+    int value[DOF];
+    value[0] = 110;
+    value[1] = -110;
+    value[2] = 110;
+    value[3] = -110;
+    value[DOF - 1] = 0;
+    bool move = hand.movePositionRelative(value);
+    delay(5000);
+
+    value[0] = -100;
+    value[1] = 100;
+    value[2] = -100;
+    value[3] = 100;
+    value[DOF - 1] = 0;
+    move = hand.movePositionRelative(value);
+    delay(5000);
+
+    value[0] = 200;
+    value[1] = -200;
+    value[2] = 200;
+    value[3] = -200;
+    value[DOF - 1] = 0;
+    move = hand.movePositionRelative(value);
+    delay(5000);
+
+    value[0] = -100;
+    value[1] = 100;
+    value[2] = -100;
+    value[3] = 100;
+    value[DOF - 1] = 0;
+    move = hand.movePositionRelative(value);
+    delay(5000);
+
+    value[0] = 200;
+    value[1] = -200;
+    value[2] = 200;
+    value[3] = -200;
+    value[DOF - 1] = 0;
+    move = hand.movePositionRelative(value);
+    delay(50000);
+
+    return move;
 }
