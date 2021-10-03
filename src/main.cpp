@@ -60,7 +60,7 @@ sensor_msgs::JointState setMsg() {
     for (int i = 0; i < motor.DXL_ID_CNT; i++) {
         pos[i] = *(values + i + motor.DXL_ID_CNT);
         vel[i] = *(values + i + motor.DXL_ID_CNT * 2);
-        eff[i] = 1;
+        eff[i] = *(values + i);
     }
 
     //Finger Servo
@@ -90,6 +90,8 @@ void motorControlCallback() {
         hand.movePositionRelative(position);
     } else if (mode == 112) {
         hand.movePosition(position);
+    } else if (mode == 124) {
+        hand.calibratePositionBulk();
     }
 }
 

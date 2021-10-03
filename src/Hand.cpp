@@ -1,7 +1,7 @@
 #include <Hand.h>
 #include <Motor.h>
 
-#define AUTO_CALIBRATION false
+#define AUTO_CALIBRATION true
 
 Hand::Hand(Motor& motor, Debug* debug) : _motor(motor), _debug(debug), _msg("") {
 }
@@ -18,7 +18,7 @@ void Hand::init() {
 
 #if AUTO_CALIBRATION
     _motor.setTorque(true);
-    Hand::calibratePositionBulk())
+    Hand::calibratePositionBulk();
 #else
     _motor.setTorque(false);
 #endif
