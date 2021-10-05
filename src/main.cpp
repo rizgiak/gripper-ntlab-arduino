@@ -64,7 +64,7 @@ sensor_msgs::JointState setMsg() {
     }
 
     //Finger Servo
-    pos[DOF - 1] = 0;
+    pos[DOF - 1] = motor.getPresentPosition(motor.DXL_ID_CNT);
     vel[DOF - 1] = 1;
     eff[DOF - 1] = mode;
 
@@ -85,13 +85,13 @@ sensor_msgs::JointState setMsg() {
 
 void motorControlCallback() {
     if (mode == 72) {
-        hand.movePositionRelativePrecision(position);
-    } else if (mode == 96) {
-        hand.movePositionRelative(position);
-    } else if (mode == 112) {
+        hand.calibratePositionBulk();   
+    } else if (mode == 101) {
         hand.movePosition(position);
+    } else if (mode == 112) {
+        hand.movePositionRelative(position);
     } else if (mode == 124) {
-        hand.calibratePositionBulk();
+        hand.movePositionRelativePrecision(position);
     }
 }
 
