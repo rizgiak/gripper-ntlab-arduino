@@ -79,6 +79,8 @@ bool Hand::calibratePositionBulk() {
             calibration_flag = true;
     }
 
+    _motor.initServo();
+
     // set calibration value
     Hand::_present_value = _motor.getPresentValues();
     _debug->print("calibration result: ");

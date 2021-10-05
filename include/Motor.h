@@ -9,6 +9,7 @@ class Motor {
     Dynamixel2Arduino _dxl;
     Debug* _debug;
     char _msg[100];
+    int _servo_position;
 
    public:
     // Number of IDs
@@ -18,6 +19,8 @@ class Motor {
 
     Motor(Debug* debug);
     void init();
+    bool initServo();
+    bool move(int val);
     bool setOperatingMode(OperatingMode mode);
     bool setTorque(bool torque);
     bool setPID(int id, int p, int i, int d);

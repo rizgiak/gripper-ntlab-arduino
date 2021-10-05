@@ -1,9 +1,16 @@
 #include <Motor.h>
+#include <Servo.h>
 
 #define DXL Serial2
 #define DXL_DIR_PIN 2
 #define DXL_PROTOCOL_VERSION 2.0
 #define DXL_BAUDRATE 57600
+
+#define SERVO_PIN 3
+#define ROTATE_MIN 500
+#define ROTATE_MAX 4000
+
+Servo servo;
 
 const uint16_t user_pkt_buf_cap = 128;
 uint8_t user_pkt_buf[user_pkt_buf_cap];
@@ -33,7 +40,7 @@ sw_data_t sw_data[Motor::DXL_ID_CNT];
 DYNAMIXEL::InfoSyncWriteInst_t sw_infos;
 DYNAMIXEL::XELInfoSyncWrite_t info_xels_sw[Motor::DXL_ID_CNT];
 
-Motor::Motor(Debug* debug) : _dxl(Dynamixel2Arduino(DXL, DXL_DIR_PIN)), _debug(debug) {
+Motor::Motor(Debug* debug) : _dxl(Dynamixel2Arduino(DXL, DXL_DIR_PIN)), _debug(debug), _servo_position(0) {
 }
 
 void Motor::init() {
@@ -74,6 +81,9 @@ void Motor::init() {
         sr_infos.xel_count++;
     }
     sr_infos.is_info_changed = true;
+
+    //Servo initialization
+    servo.attach(SERVO_PIN);
 }
 
 bool Motor::setOperatingMode(OperatingMode mode) {
@@ -108,7 +118,10 @@ bool Motor::setVelocity(int id, int vel) {
 }
 
 float Motor::getPresentPosition(int id) {
-    return _dxl.getPresentPosition(id);
+    if (id == DXL_ID_CNT)
+        return Motor::_servo_position;
+    else
+        return _dxl.getPresentPosition(id);
 }
 
 float Motor::getPresentCurrent(int id) {
@@ -127,6 +140,7 @@ bool Motor::setGoalPositions(int val[]) {
     sw_infos.is_info_changed = true;
 
     if (_dxl.syncWrite(&sw_infos) == true) {
+        move(val[DXL_ID_CNT]);
         //_debug->println("[SyncWrite] Success");
     } else {
         sprintf(_msg, "[SyncWrite] Fail, ErrorCode: %d", (int)_dxl.getLastLibErrCode());
@@ -163,4 +177,18 @@ int* Motor::getPresentValues() {
         }
     }
     return results;
+}
+
+bool Motor::initServo() {
+    return move(ROTATE_MIN);
+}
+
+bool Motor::move(int val) {
+    if (val >= ROTATE_MIN && val <= ROTATE_MAX) {
+        Motor::_servo_position = val;
+        servo.writeMicroseconds(val);
+        return true;
+    } else {
+        return false;
+    }
 }
