@@ -11,8 +11,8 @@ void Hand::init() {
     _debug->println("Hand::init");
     _motor.setOperatingMode(OP_EXTENDED_POSITION);
 
-    for (unsigned int i = 0; i < sizeof(Hand::_calib_position) / sizeof(Hand::_calib_position[0]); i++) {
-        Hand::_calib_position[i] = 0;
+    for (unsigned int i = 0; i < _motor.DOF; i++) {
+        _calib_position[i] = 0;
         _motor.setVelocity(i, 100);
     }
 
@@ -44,6 +44,7 @@ bool Hand::calibratePosition() {
 // Home motor to base position (parallel)
 bool Hand::calibratePositionBulk() {
     const double current_limit[_motor.DXL_ID_CNT] = {70, 70, 70, 70};  // limit to stop calibration movement
+    const int limit_offset[_motor.DOF] = {3600, 3600, 1200, 1200, 2000}; // limit offset each motors
     const float delta = 10;
     int value[_motor.DXL_ID_CNT] = {0};
     int positions[_motor.DXL_ID_CNT] = {0};
@@ -54,10 +55,10 @@ bool Hand::calibratePositionBulk() {
 
     while (!calibration_flag) {
         delay(10);
-        Hand::_present_value = _motor.getPresentValues();
+        _present_value = _motor.getPresentValues();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            currents[i] = *(Hand::_present_value + i);
-            positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+            currents[i] = *(_present_value + i);
+            positions[i] = *(_present_value + i + _motor.DOF);
         }
 
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
@@ -82,23 +83,22 @@ bool Hand::calibratePositionBulk() {
     _motor.initServo();
 
     // set calibration value
-    Hand::_present_value = _motor.getPresentValues();
+    _present_value = _motor.getPresentValues();
     _debug->print("calibration result: ");
-    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        _calib_position[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+    for (int i = 0; i < _motor.DOF; i++) {
+        _calib_position[i] = *(_present_value + i + _motor.DOF);
         sprintf(_msg, "p%d:%d, ", i, _calib_position[i]);
         _debug->print(_msg);
     }
     _debug->println("");
 
     //set limit
-    const int limit_offset = 2000;
-    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
+    for (int i = 0; i < _motor.DOF; i++) {
         if (i % 2 == 0) {
             _limit_min[i] = _calib_position[i];
-            _limit_max[i] = _calib_position[i] + limit_offset;
+            _limit_max[i] = _calib_position[i] + limit_offset[i];
         } else {
-            _limit_min[i] = _calib_position[i] - limit_offset;
+            _limit_min[i] = _calib_position[i] - limit_offset[i];
             _limit_max[i] = _calib_position[i];
         }
     }
@@ -106,23 +106,23 @@ bool Hand::calibratePositionBulk() {
 }
 
 int* Hand::getCalibrationValue() {
-    return Hand::_calib_position;
+    return _calib_position;
 }
 
 int* Hand::getPresentValue() {
-    return Hand::_present_value;
+    return _present_value;
 }
 
 // Get present value from motors
 void Hand::updatePresentValue() {
-    Hand::_present_value = _motor.getPresentValues();
+    _present_value = _motor.getPresentValues();
 }
 
 // Move position with position limitation
 bool Hand::movePosition(int val[]) {
     bool force_stop_flag = false;
 
-    for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+    for (unsigned int i = 0; i < _motor.DOF; i++) {
         if (val[i] > _limit_max[i] && val[i] < _limit_min[i]) {
             force_stop_flag = true;
         }
@@ -139,27 +139,27 @@ bool Hand::movePosition(int val[]) {
 bool Hand::movePositionRelative(int val[]) {
     const float delta = 10;
 
-    int goal_position[_motor.DXL_ID_CNT] = {0};
-    int positions[_motor.DXL_ID_CNT] = {0};
-    bool motor_direction[_motor.DXL_ID_CNT] = {0};
+    int goal_position[_motor.DOF] = {0};
+    int positions[_motor.DOF] = {0};
+    bool motor_direction[_motor.DOF] = {0};
 
-    bool motor_flag[_motor.DXL_ID_CNT] = {0};
+    bool motor_flag[_motor.DOF] = {0};
     bool movement_flag = false;
     bool force_stop_flag = false;
 
-    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        goal_position[i] = *(_present_value + _motor.DXL_ID_CNT + i) + val[i];
+    for (int i = 0; i < _motor.DOF; i++) {
+        goal_position[i] = *(_present_value + _motor.DOF + i) + val[i];
         if (val[i] > 0)
             motor_direction[i] = true;
     }
 
     updatePresentValue();
-    for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+    for (unsigned int i = 0; i < _motor.DOF; i++) {
+        positions[i] = *(_present_value + i + _motor.DOF);
     }
 
     while (!movement_flag) {
-        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        for (unsigned int i = 0; i < _motor.DOF; i++) {
             if (positions[i] <= _limit_max[i] && positions[i] >= _limit_min[i]) {
                 if (motor_direction[i]) {  //goal above present value
                     if (positions[i] < goal_position[i]) {
@@ -219,8 +219,8 @@ bool Hand::movePositionRelativePrecision(int val[]) {
     while (!movement_flag) {
         updatePresentValue();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            currents[i] = *(Hand::_present_value + i);
-            positions[i] = *(Hand::_present_value + i + _motor.DXL_ID_CNT);
+            currents[i] = *(_present_value + i);
+            positions[i] = *(_present_value + i + _motor.DXL_ID_CNT);
         }
 
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {

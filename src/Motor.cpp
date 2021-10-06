@@ -7,8 +7,7 @@
 #define DXL_BAUDRATE 57600
 
 #define SERVO_PIN 3
-#define ROTATE_MIN 500
-#define ROTATE_MAX 4000
+#define INIT_ROTATION 500
 
 Servo servo;
 
@@ -117,11 +116,13 @@ bool Motor::setVelocity(int id, int vel) {
     return _dxl.writeControlTableItem(ControlTableItem::PROFILE_VELOCITY, id, vel);
 }
 
-float Motor::getPresentPosition(int id) {
-    if (id == DXL_ID_CNT)
-        return Motor::_servo_position;
-    else
-        return _dxl.getPresentPosition(id);
+int Motor::getPresentPosition(int id) {
+    if (id == DXL_ID_CNT) {
+        sprintf(_msg, "getPresentPosition, get, _servo_position: %d", _servo_position);
+        _debug->println(_msg);
+        return _servo_position;
+    } else
+        return (int)_dxl.getPresentPosition(id);
 }
 
 float Motor::getPresentCurrent(int id) {
@@ -153,7 +154,7 @@ bool Motor::setGoalPositions(int val[]) {
 int* Motor::getPresentValues() {
     int trial = 0;
     uint8_t recv_cnt;
-    static int results[Motor::DXL_ID_CNT * 3];  //change size to 3 add velocity
+    static int results[DOF * 3];  //change size to 3 add velocity
     bool flag_read = false;
 
     while (!flag_read) {
@@ -165,9 +166,15 @@ int* Motor::getPresentValues() {
                 //sprintf(_msg, "  ID: %d, Err: %d\t Crr: %d \t Pos: %d", sr_infos.p_xels[i].id, sr_infos.p_xels[i].error, sr_data[i].present_current, (int)sr_data[i].present_position);
                 //_debug->println(_msg);
                 results[i] = abs(sr_data[i].present_current);
-                results[i + Motor::DXL_ID_CNT] = sr_data[i].present_position;
-                results[i + Motor::DXL_ID_CNT * 2] = sr_data[i].present_velocity;
+                results[i + DOF] = sr_data[i].present_position;
+                results[i + DOF * 2] = sr_data[i].present_velocity;
             }
+
+            //Servo finger
+            results[recv_cnt] = 1;
+            results[recv_cnt + DOF] = _servo_position;
+            results[recv_cnt + DOF * 2] = 1;
+
             flag_read = true;
         } else {
             trial++;
@@ -180,15 +187,11 @@ int* Motor::getPresentValues() {
 }
 
 bool Motor::initServo() {
-    return move(ROTATE_MIN);
+    return move(INIT_ROTATION);
 }
 
 bool Motor::move(int val) {
-    if (val >= ROTATE_MIN && val <= ROTATE_MAX) {
-        Motor::_servo_position = val;
-        servo.writeMicroseconds(val);
-        return true;
-    } else {
-        return false;
-    }
+    _servo_position = val;
+    servo.writeMicroseconds(val);
+    return true;
 }

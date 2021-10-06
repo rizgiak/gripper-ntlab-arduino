@@ -8,9 +8,9 @@ class Hand {
     Motor _motor;
     Debug* _debug;
     char _msg[100];
-    int _calib_position[4];
-    int _limit_min[4];
-    int _limit_max[4];
+    int _calib_position[5];
+    int _limit_min[5];
+    int _limit_max[5];
     int* _present_value;
 
    public:

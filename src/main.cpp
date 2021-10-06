@@ -21,31 +21,33 @@ Thread* publishThread = new Thread();
 
 // define global function
 bool testCase1();
+bool testCase2();
 
 Motor motor(&debug);
 Hand hand(motor, &debug);
 
 ros::NodeHandle nh;
 
-const int DOF = 5;
 const char robot[8] = "gripper";
 
-float pos[DOF], vel[DOF], eff[DOF];
+float pos[motor.DOF], vel[motor.DOF], eff[motor.DOF];
 
 int mode;
-int position[DOF] = {0};
+int position[motor.DOF] = {0};
 
 int* values;
-char* joint_name[DOF] = {"l_base_hand_r_position_controller",
-                         "r_base_hand_r_position_controller",
-                         "l_hand_rod_a_position_controller",
-                         "r_hand_rod_a_position_controller",
-                         "l_finger_roll_position_controller"};
+int* calib_values;
+
+char* joint_name[motor.DOF] = {"l_base_hand_s",
+                               "r_base_hand_s",
+                               "l_hand_rod_a",
+                               "r_hand_rod_a",
+                               "l_finger_roll"};
 
 void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
     mode = sub_msg.mode;
-    for (unsigned int i = 0; i < DOF; i++) {
-        position[i] = (int)sub_msg.position[i];
+    for (unsigned int i = 0; i < motor.DOF; i++) {
+        position[i] = (int)sub_msg.position[i] + *(calib_values + i);
     }
 }
 
@@ -57,24 +59,20 @@ ros::Publisher pub("gripper_ntlab/JointState", &pub_msg);
 sensor_msgs::JointState setMsg() {
     sensor_msgs::JointState msg;
     values = hand.getPresentValue();
-    for (int i = 0; i < motor.DXL_ID_CNT; i++) {
-        pos[i] = *(values + i + motor.DXL_ID_CNT);
-        vel[i] = *(values + i + motor.DXL_ID_CNT * 2);
-        eff[i] = *(values + i);
+    for (int i = 0; i < (motor.DXL_ID_CNT + 1); i++) {                          // + 1 add servo position
+        pos[i] = *(values + i + (motor.DXL_ID_CNT + 1)) - *(calib_values + i);  // 0 is absolute as calibration values
+        vel[i] = *(values + i + (motor.DXL_ID_CNT + 1) * 2);
+        //eff[i] = *(values + i);
+        eff[i] = 1;
     }
-
-    //Finger Servo
-    pos[DOF - 1] = motor.getPresentPosition(motor.DXL_ID_CNT);
-    vel[DOF - 1] = 1;
-    eff[DOF - 1] = mode;
 
     msg.header.frame_id = robot;
     msg.header.stamp = nh.now();
 
-    msg.name_length = DOF;
-    msg.velocity_length = DOF;
-    msg.position_length = DOF;
-    msg.effort_length = DOF;
+    msg.name_length = motor.DOF;
+    msg.velocity_length = motor.DOF;
+    msg.position_length = motor.DOF;
+    msg.effort_length = motor.DOF;
 
     msg.name = joint_name;
     msg.position = pos;
@@ -85,7 +83,7 @@ sensor_msgs::JointState setMsg() {
 
 void motorControlCallback() {
     if (mode == 72) {
-        hand.calibratePositionBulk();   
+        hand.calibratePositionBulk();
     } else if (mode == 101) {
         hand.movePosition(position);
     } else if (mode == 112) {
@@ -113,6 +111,7 @@ void setup() {
 #endif
     motor.init();
     hand.init();
+    calib_values = hand.getCalibrationValue();
 
     motorControlThread->onRun(motorControlCallback);
     motorControlThread->setInterval(500);
@@ -126,7 +125,7 @@ void setup() {
 
 void loop() {
 #if DEBUG
-    testCase1();
+    testCase2();
 #else
     threadController.run();
     hand.updatePresentValue();
@@ -134,13 +133,14 @@ void loop() {
 #endif
 }
 
+#if DEBUG
 bool testCase1() {
-    int value[DOF];
+    int value[motor.DOF];
     value[0] = 110;
     value[1] = -110;
     value[2] = 110;
     value[3] = -110;
-    value[DOF - 1] = 0;
+    value[motor.DOF - 1] = 0;
     bool move = hand.movePositionRelative(value);
     delay(5000);
 
@@ -148,7 +148,7 @@ bool testCase1() {
     value[1] = 100;
     value[2] = -100;
     value[3] = 100;
-    value[DOF - 1] = 0;
+    value[motor.DOF - 1] = 0;
     move = hand.movePositionRelative(value);
     delay(5000);
 
@@ -156,7 +156,7 @@ bool testCase1() {
     value[1] = -200;
     value[2] = 200;
     value[3] = -200;
-    value[DOF - 1] = 0;
+    value[motor.DOF - 1] = 0;
     move = hand.movePositionRelative(value);
     delay(5000);
 
@@ -164,7 +164,7 @@ bool testCase1() {
     value[1] = 100;
     value[2] = -100;
     value[3] = 100;
-    value[DOF - 1] = 0;
+    value[motor.DOF - 1] = 0;
     move = hand.movePositionRelative(value);
     delay(5000);
 
@@ -172,9 +172,39 @@ bool testCase1() {
     value[1] = -200;
     value[2] = 200;
     value[3] = -200;
-    value[DOF - 1] = 0;
+    value[motor.DOF - 1] = 0;
     move = hand.movePositionRelative(value);
     delay(50000);
 
     return move;
 }
+
+bool testCase2() {
+    // int value[motor.DOF];
+    // value[0] = 110;
+    // value[1] = -110;
+    // value[2] = 110;
+    // value[3] = -110;
+    // value[motor.DOF - 1] = 500;
+    //hand.movePositionRelative(value);
+    motor.move(500);
+    // hand.updatePresentValue();
+    // values = hand.getPresentValue();
+    // for (int i = 0; i < motor.DXL_ID_CNT; i++) {
+    //     sprintf(msg, "j%d: %d, ", i, *(values + i + motor.DXL_ID_CNT));
+    //     debug.print(msg);
+    // }
+    // debug.println("");
+    float a = motor.getPresentPosition(motor.DXL_ID_CNT) * 1.0;
+    sprintf(msg, "testCase2, get, getPresentPosition: %1.2f", a);
+    debug.println(msg);
+
+    delay(1000);
+
+    motor.move(1364);
+    a = motor.getPresentPosition(motor.DXL_ID_CNT) * 1.0;
+    sprintf(msg, "testCase2, get, getPresentPosition: %1.2f", a);
+    debug.println(msg);
+    delay(1000);
+}
+#endif
