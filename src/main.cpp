@@ -54,7 +54,7 @@ void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
 ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/SetPosition", jointSubs);
 
 sensor_msgs::JointState pub_msg;
-ros::Publisher pub("gripper_ntlab/JointState", &pub_msg);
+ros::Publisher pub("gripper_ntlab/joint_states", &pub_msg);
 
 sensor_msgs::JointState setMsg() {
     sensor_msgs::JointState msg;
