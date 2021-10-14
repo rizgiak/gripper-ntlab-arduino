@@ -46,12 +46,17 @@ char* joint_name[motor.DOF] = {"l_base_hand_s",
 
 void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
     mode = sub_msg.mode;
+
     for (unsigned int i = 0; i < motor.DOF; i++) {
-        position[i] = (int)sub_msg.position[i] + *(calib_values + i);
+        if (mode == 101) {
+            position[i] = (int)sub_msg.position[i] + *(calib_values + i);
+        }else{
+            position[i] = (int)sub_msg.position[i];
+        }
     }
 }
 
-ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/SetPosition", jointSubs);
+ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/set_position", jointSubs);
 
 sensor_msgs::JointState pub_msg;
 ros::Publisher pub("gripper_ntlab/joint_states", &pub_msg);
@@ -59,9 +64,9 @@ ros::Publisher pub("gripper_ntlab/joint_states", &pub_msg);
 sensor_msgs::JointState setMsg() {
     sensor_msgs::JointState msg;
     values = hand.getPresentValue();
-    for (int i = 0; i < (motor.DXL_ID_CNT + 1); i++) {                          // + 1 add servo position
-        pos[i] = *(values + i + (motor.DXL_ID_CNT + 1)) - *(calib_values + i);  // 0 is absolute as calibration values
-        vel[i] = *(values + i + (motor.DXL_ID_CNT + 1) * 2);
+    for (int i = 0; i < (motor.DOF); i++) {                          // + 1 add servo position
+        pos[i] = *(values + i + (motor.DOF)) - *(calib_values + i);  // 0 is absolute as calibration values
+        vel[i] = *(values + i + (motor.DOF) * 2);
         //eff[i] = *(values + i);
         eff[i] = 1;
     }
@@ -90,6 +95,7 @@ void motorControlCallback() {
         hand.movePositionRelative(position);
     } else if (mode == 124) {
         hand.movePositionRelativePrecision(position);
+        mode = 0;
     }
 }
 

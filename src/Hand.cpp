@@ -198,32 +198,33 @@ bool Hand::movePositionRelative(int val[]) {
 
 // Move position relative with position and current limit
 bool Hand::movePositionRelativePrecision(int val[]) {
-    const double current_limit[_motor.DXL_ID_CNT] = {120, 120, 120, 120};  // limit to stop movement
+    const double current_limit[_motor.DOF] = {60, 60, 60, 60, 60};  // limit to stop movement
     const float delta = 10;
+    _debug->print("movePositionRelativePrecision");
 
-    int goal_position[_motor.DXL_ID_CNT] = {0};
-    int currents[_motor.DXL_ID_CNT] = {0};
-    int positions[_motor.DXL_ID_CNT] = {0};
-    bool motor_direction[_motor.DXL_ID_CNT] = {0};
+    int goal_position[_motor.DOF] = {0};
+    int currents[_motor.DOF] = {0};
+    int positions[_motor.DOF] = {0};
+    bool motor_direction[_motor.DOF] = {0};
 
-    bool motor_flag[_motor.DXL_ID_CNT] = {0};
+    bool motor_flag[_motor.DOF] = {0};
     bool movement_flag = false;
     bool force_stop_flag = false;
 
-    for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
-        goal_position[i] = *(_present_value + _motor.DXL_ID_CNT + i) + val[i];
+    for (int i = 0; i < _motor.DOF; i++) {
+        goal_position[i] = *(_present_value + _motor.DOF + i) + val[i];
         if (val[i] > 0)
             motor_direction[i] = true;
     }
 
     while (!movement_flag) {
         updatePresentValue();
-        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        for (unsigned int i = 0; i < _motor.DOF; i++) {
             currents[i] = *(_present_value + i);
-            positions[i] = *(_present_value + i + _motor.DXL_ID_CNT);
+            positions[i] = *(_present_value + i + _motor.DOF);
         }
 
-        for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        for (unsigned int i = 0; i < _motor.DOF; i++) {
             if (currents[i] < current_limit[i]) {
                 if (motor_direction[i]) {  //goal above present value
                     if (positions[i] < goal_position[i]) {
@@ -249,11 +250,11 @@ bool Hand::movePositionRelativePrecision(int val[]) {
         }
 
         int j = 0;
-        for (int i = 0; i < _motor.DXL_ID_CNT; i++) {
+        for (int i = 0; i < _motor.DOF; i++) {
             if (motor_flag[i])
                 j++;
         }
-        if (j >= _motor.DXL_ID_CNT || force_stop_flag == true)
+        if (j >= _motor.DOF || force_stop_flag == true)
             movement_flag = true;
     }
 
