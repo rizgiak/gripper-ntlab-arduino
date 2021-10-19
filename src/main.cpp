@@ -50,10 +50,16 @@ void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
     for (unsigned int i = 0; i < motor.DOF; i++) {
         if (mode == 101) {
             position[i] = (int)sub_msg.position[i] + *(calib_values + i);
-        }else{
+        } else {
             position[i] = (int)sub_msg.position[i];
         }
     }
+}
+
+// based on Dynamixel performance graph
+// https://emanual.robotis.com/docs/en/dxl/x/xm430-w350/
+float currentToTorque(float val){
+    return (float)(1.731448764 * (val / 1000)); //- 0.12614841
 }
 
 ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/set_position", jointSubs);
@@ -67,8 +73,8 @@ sensor_msgs::JointState setMsg() {
     for (int i = 0; i < (motor.DOF); i++) {                          // + 1 add servo position
         pos[i] = *(values + i + (motor.DOF)) - *(calib_values + i);  // 0 is absolute as calibration values
         vel[i] = *(values + i + (motor.DOF) * 2);
-        //eff[i] = *(values + i);
-        eff[i] = 1;
+        eff[i] = currentToTorque(*(values + i));
+        // eff[i] = 1;
     }
 
     msg.header.frame_id = robot;
@@ -192,7 +198,7 @@ bool testCase2() {
     // value[2] = 110;
     // value[3] = -110;
     // value[motor.DOF - 1] = 500;
-    //hand.movePositionRelative(value);
+    // hand.movePositionRelative(value);
     motor.move(500);
     // hand.updatePresentValue();
     // values = hand.getPresentValue();
