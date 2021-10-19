@@ -165,7 +165,7 @@ int* Motor::getPresentValues() {
             for (int i = 0; i < recv_cnt; i++) {
                 //sprintf(_msg, "  ID: %d, Err: %d\t Crr: %d \t Pos: %d", sr_infos.p_xels[i].id, sr_infos.p_xels[i].error, sr_data[i].present_current, (int)sr_data[i].present_position);
                 //_debug->println(_msg);
-                results[i] = abs(sr_data[i].present_current);
+                results[i] = sr_data[i].present_current;
                 results[i + DOF] = sr_data[i].present_position;
                 results[i + DOF * 2] = sr_data[i].present_velocity;
             }

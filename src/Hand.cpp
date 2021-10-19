@@ -57,7 +57,7 @@ bool Hand::calibratePositionBulk() {
         delay(10);
         _present_value = _motor.getPresentValues();
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
-            currents[i] = *(_present_value + i);
+            currents[i] = abs(*(_present_value + i));
             positions[i] = *(_present_value + i + _motor.DOF);
         }
 
@@ -220,7 +220,7 @@ bool Hand::movePositionRelativePrecision(int val[]) {
     while (!movement_flag) {
         updatePresentValue();
         for (unsigned int i = 0; i < _motor.DOF; i++) {
-            currents[i] = *(_present_value + i);
+            currents[i] = abs(*(_present_value + i));
             positions[i] = *(_present_value + i + _motor.DOF);
         }
 
