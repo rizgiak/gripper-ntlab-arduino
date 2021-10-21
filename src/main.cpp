@@ -126,7 +126,7 @@ void setup() {
     calib_values = hand.getCalibrationValue();
 
     motorControlThread->onRun(motorControlCallback);
-    motorControlThread->setInterval(500);
+    motorControlThread->setInterval(50);
 
     publishThread->onRun(publishCallback);
     publishThread->setInterval(100);
