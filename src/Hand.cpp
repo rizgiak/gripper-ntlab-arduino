@@ -43,8 +43,12 @@ bool Hand::calibratePosition() {
 
 // Home motor to base position (parallel)
 bool Hand::calibratePositionBulk() {
-    const double current_limit[_motor.DXL_ID_CNT] = {70, 70, 70, 70};  // limit to stop calibration movement
-    const int limit_offset[_motor.DOF] = {3600, 3600, 1200, 1200, 2000}; // limit offset each motors
+    const double current_limit[_motor.DXL_ID_CNT] = {70, 70, 70, 70};     // limit to stop calibration movement
+    const int limit_offset[_motor.DOF] = {3600, 3600, 1200, 1200, 2000};  // limit offset each motors
+    const bool calibration_direction[_motor.DXL_ID_CNT] = { false,
+                                                            true,
+                                                            true,
+                                                            false };  // false = CCW, true = CW
     const float delta = 10;
     int value[_motor.DXL_ID_CNT] = {0};
     int positions[_motor.DXL_ID_CNT] = {0};
@@ -64,7 +68,7 @@ bool Hand::calibratePositionBulk() {
         for (unsigned int i = 0; i < _motor.DXL_ID_CNT; i++) {
             value[i] = positions[i];
             if (currents[i] < current_limit[i] && !motor_flag[i]) {
-                value[i] = (i % 2 == 0) ? value[i] - delta : value[i] + delta;
+                value[i] = (calibration_direction[i]) ? value[i] - delta : value[i] + delta;
             } else {
                 motor_flag[i] = true;
             }
@@ -92,7 +96,7 @@ bool Hand::calibratePositionBulk() {
     }
     _debug->println("");
 
-    //set limit
+    // set limit
     for (int i = 0; i < _motor.DOF; i++) {
         if (i % 2 == 0) {
             _limit_min[i] = _calib_position[i];
@@ -161,7 +165,7 @@ bool Hand::movePositionRelative(int val[]) {
     while (!movement_flag) {
         for (unsigned int i = 0; i < _motor.DOF; i++) {
             if (positions[i] <= _limit_max[i] && positions[i] >= _limit_min[i]) {
-                if (motor_direction[i]) {  //goal above present value
+                if (motor_direction[i]) {  // goal above present value
                     if (positions[i] < goal_position[i]) {
                         positions[i] = positions[i] + delta;
                     } else {
@@ -226,7 +230,7 @@ bool Hand::movePositionRelativePrecision(int val[]) {
 
         for (unsigned int i = 0; i < _motor.DOF; i++) {
             if (currents[i] < current_limit[i]) {
-                if (motor_direction[i]) {  //goal above present value
+                if (motor_direction[i]) {  // goal above present value
                     if (positions[i] < goal_position[i]) {
                         positions[i] = positions[i] + delta;
                     } else {
