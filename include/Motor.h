@@ -15,7 +15,7 @@ class Motor {
     // Number of IDs
     static const uint8_t DXL_ID_CNT = 4;
     // List of IDs
-    const uint8_t DXL_ID_LIST[Motor::DXL_ID_CNT] = {1, 2, 3, 4};
+    const uint8_t DXL_ID_LIST[Motor::DXL_ID_CNT] = {0, 1, 2, 3};
     // DOFs
     static const uint8_t DOF = 5;
 

@@ -7,9 +7,12 @@
 #define DXL_BAUDRATE 57600
 
 #define SERVO_PIN 3
+#define SERVO_PIN_2 4
 #define INIT_ROTATION 500
+#define INIT_ROTATION2 2000
 
 Servo servo;
+Servo servo2;
 
 const uint16_t user_pkt_buf_cap = 128;
 uint8_t user_pkt_buf[user_pkt_buf_cap];
@@ -83,6 +86,7 @@ void Motor::init() {
 
     //Servo initialization
     servo.attach(SERVO_PIN);
+    servo2.attach(SERVO_PIN_2);
 }
 
 bool Motor::setOperatingMode(OperatingMode mode) {
@@ -193,5 +197,6 @@ bool Motor::initServo() {
 bool Motor::move(int val) {
     _servo_position = val;
     servo.writeMicroseconds(val);
+    servo2.writeMicroseconds(INIT_ROTATION2 - val);
     return true;
 }

@@ -137,7 +137,7 @@ void setup() {
 
 void loop() {
 #if DEBUG
-    testCase2();
+    //testCase2();
 #else
     threadController.run();
     hand.updatePresentValue();
