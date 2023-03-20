@@ -1,7 +1,7 @@
 #include <Hand.h>
 #include <Thread.h>
 #include <ThreadController.h>
-#include <gripper_ntlab_controller/JointPosition.h>
+#include <gripper_ntlab_msgs/JointPosition.h>
 #include <ros.h>
 #include <sensor_msgs/JointState.h>
 #include <std_msgs/Float64.h>
@@ -44,7 +44,7 @@ char* joint_name[motor.DOF] = {"l_base_hand_s",
                                "r_hand_rod_a",
                                "l_finger_roll"};
 
-void jointSubs(const gripper_ntlab_controller::JointPosition& sub_msg) {
+void jointSubs(const gripper_ntlab_msgs::JointPosition& sub_msg) {
     mode = sub_msg.mode;
 
     for (unsigned int i = 0; i < motor.DOF; i++) {
@@ -62,7 +62,7 @@ float currentToTorque(float val){
     return (float)(1.731448764 * (val / 1000)); //- 0.12614841
 }
 
-ros::Subscriber<gripper_ntlab_controller::JointPosition> sub("gripper_ntlab/set_position", jointSubs);
+ros::Subscriber<gripper_ntlab_msgs::JointPosition> sub("gripper_ntlab/set_position", jointSubs);
 
 sensor_msgs::JointState pub_msg;
 ros::Publisher pub("gripper_ntlab/joint_states", &pub_msg);
